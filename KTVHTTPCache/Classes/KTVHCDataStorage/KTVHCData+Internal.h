@@ -19,7 +19,8 @@
 
 @interface KTVHCDataReader ()
 
-- (instancetype)initWithRequest:(KTVHCDataRequest *)request NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithRequest:(KTVHCDataRequest *)request;
+- (instancetype)initWithRequest:(KTVHCDataRequest *)request rangePlanner:(id <KTVHCDataRangePlanning>)rangePlanner NS_DESIGNATED_INITIALIZER;
 
 @end
 

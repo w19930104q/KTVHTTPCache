@@ -28,10 +28,17 @@
 
 - (instancetype)initWithRequest:(KTVHCDataRequest *)request
 {
+    return [self initWithRequest:request rangePlanner:nil];
+}
+
+- (instancetype)initWithRequest:(KTVHCDataRequest *)request rangePlanner:(id<KTVHCDataRangePlanning>)rangePlanner
+{
     if (self = [super init]) {
         KTVHCLogAlloc(self);
         self.unit = [[KTVHCDataUnitPool pool] unitWithURL:request.URL];
-        self->_request = [request newRequestWithTotalLength:self.unit.totalLength];
+        self->_rangePlanner = rangePlanner ? rangePlanner : [KTVHCDataRangePlanner planner];
+        self->_rangePlan = [self.rangePlanner planWithRequest:request unit:self.unit];
+        self->_request = self.rangePlan.request;
         self.coreLock = [[NSRecursiveLock alloc] init];
         self.delegateQueue = dispatch_queue_create("KTVHCDataReader_delegateQueue", DISPATCH_QUEUE_SERIAL);
         self.internalDelegateQueue = dispatch_queue_create("KTVHCDataReader_internalDelegateQueue", DISPATCH_QUEUE_SERIAL);
@@ -114,59 +121,22 @@
 
 - (void)prepareSourceManager
 {
-    NSMutableArray<KTVHCDataFileSource *> *fileSources = [NSMutableArray array];
-    NSMutableArray<KTVHCDataNetworkSource *> *networkSources = [NSMutableArray array];
-    long long min = self.request.range.start;
-    long long max = self.request.range.end;
-    NSArray *unitItems = self.unit.unitItems;
-    for (KTVHCDataUnitItem *item in unitItems) {
-        long long itemMin = item.offset;
-        long long itemMax = item.offset + item.length - 1;
-        if (itemMax < min || itemMin > max) {
-            continue;
-        }
-        if (min > itemMin) {
-            itemMin = min;
-        }
-        if (max < itemMax) {
-            itemMax = max;
-        }
-        min = itemMax + 1;
-        KTVHCRange range = KTVHCMakeRange(item.offset, item.offset + item.length - 1);
-        KTVHCRange readRange = KTVHCMakeRange(itemMin - item.offset, itemMax - item.offset);
-        KTVHCDataFileSource *source = [[KTVHCDataFileSource alloc] initWithPath:item.absolutePath range:range readRange:readRange];
-        [fileSources addObject:source];
-    }
-    [fileSources sortUsingComparator:^NSComparisonResult(KTVHCDataFileSource *obj1, KTVHCDataFileSource *obj2) {
-        if (obj1.range.start < obj2.range.start) {
-            return NSOrderedAscending;
-        }
-        return NSOrderedDescending;
-    }];
-    long long offset = self.request.range.start;
-    long long length = KTVHCRangeGetLength(self.request.range);
-    for (KTVHCDataFileSource *obj in fileSources) {
-        long long delta = obj.range.start + obj.readRange.start - offset;
-        if (delta > 0) {
-            KTVHCRange range = KTVHCMakeRange(offset, offset + delta - 1);
-            KTVHCDataRequest *request = [self.request newRequestWithRange:range];
-            KTVHCDataNetworkSource *source = [[KTVHCDataNetworkSource alloc] initWithRequest:request];
-            [networkSources addObject:source];
-            offset += delta;
-            length -= delta;
-        }
-        offset += KTVHCRangeGetLength(obj.readRange);
-        length -= KTVHCRangeGetLength(obj.readRange);
-    }
-    if (length > 0) {
-        KTVHCRange range = KTVHCMakeRange(offset, self.request.range.end);
-        KTVHCDataRequest *request = [self.request newRequestWithRange:range];
-        KTVHCDataNetworkSource *source = [[KTVHCDataNetworkSource alloc] initWithRequest:request];
-        [networkSources addObject:source];
-    }
     NSMutableArray<id<KTVHCDataSource>> *sources = [NSMutableArray array];
-    [sources addObjectsFromArray:fileSources];
-    [sources addObjectsFromArray:networkSources];
+    for (KTVHCDataRangePlanSegment *segment in self.rangePlan.segments) {
+        switch (segment.type) {
+            case KTVHCDataRangePlanSegmentTypeFile: {
+                KTVHCDataFileSource *source = [[KTVHCDataFileSource alloc] initWithPath:segment.path range:segment.range readRange:segment.readRange];
+                [sources addObject:source];
+            }
+                break;
+            case KTVHCDataRangePlanSegmentTypeNetwork: {
+                KTVHCDataRequest *request = [self.request newRequestWithRange:segment.range];
+                KTVHCDataNetworkSource *source = [[KTVHCDataNetworkSource alloc] initWithRequest:request];
+                [sources addObject:source];
+            }
+                break;
+        }
+    }
     self.sourceManager = [[KTVHCDataSourceManager alloc] initWithSources:sources delegate:self delegateQueue:self.internalDelegateQueue];
     [self.sourceManager prepare];
 }
@@ -240,8 +210,7 @@
     }
     if (self.sourceManager.isPrepared && self.unit.totalLength > 0) {
         long long totalLength = self.unit.totalLength;
-        KTVHCRange range = KTVHCRangeWithEnsureLength(self.request.range, totalLength);
-        NSDictionary *headers = KTVHCRangeFillToResponseHeaders(range, self.unit.responseHeaders, totalLength);
+        NSDictionary *headers = [self.rangePlan responseHeadersWithBaseHeaders:self.unit.responseHeaders totalLength:totalLength];
         self->_response = [[KTVHCDataResponse alloc] initWithURL:self.request.URL headers:headers];
         self->_prepared = YES;
         KTVHCLogDataReader(@"%p, Reader did prepared\nResponse : %@", self, self.response);

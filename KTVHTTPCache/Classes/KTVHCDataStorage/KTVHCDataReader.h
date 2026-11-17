@@ -7,6 +7,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "KTVHCDataRangePlan.h"
 
 @class KTVHCDataReader;
 @class KTVHCDataRequest;
@@ -30,6 +31,12 @@
 
 @property (nonatomic, strong, readonly) KTVHCDataRequest *request;
 @property (nonatomic, strong, readonly) KTVHCDataResponse *response;
+
+/**
+ *  The range plan driving this reader. Produced by the injected planner.
+ */
+@property (nonatomic, strong, readonly) id <KTVHCDataRangePlanning> rangePlanner;
+@property (nonatomic, strong, readonly) KTVHCDataRangePlan *rangePlan;
 
 @property (nonatomic, copy, readonly) NSError *error;
 

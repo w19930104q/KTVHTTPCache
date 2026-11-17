@@ -13,6 +13,7 @@
 #import "KTVHCDataRequest.h"
 #import "KTVHCDataResponse.h"
 #import "KTVHCDataCacheItem.h"
+#import "KTVHCDataRangePlan.h"
 
 @interface KTVHCDataStorage : NSObject
 
@@ -20,6 +21,13 @@
 - (instancetype)init NS_UNAVAILABLE;
 
 + (instancetype)storage;
+
+/**
+ *  Injectable range planner. Readers created after setting this property
+ *  will use it to map request ranges to file and network segments.
+ *  Defaults to the shared KTVHCDataRangePlanner.
+ */
+@property (nonatomic, strong) id <KTVHCDataRangePlanning> rangePlanner;
 
 /**
  *  Return file path if the content did finished cache.

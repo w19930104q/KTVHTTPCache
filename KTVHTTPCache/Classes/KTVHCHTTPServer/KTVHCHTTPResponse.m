@@ -70,19 +70,24 @@
 
 - (NSDictionary *)httpHeaders
 {
-    NSMutableDictionary *headers = [self.reader.response.headers mutableCopy];
-    [headers removeObjectForKey:@"Content-Range"];
-    [headers removeObjectForKey:@"content-range"];
-    [headers removeObjectForKey:@"Content-Length"];
-    [headers removeObjectForKey:@"content-length"];
+    NSDictionary *headers = [self.reader.rangePlan HTTPHeadersWithBaseHeaders:self.reader.response.headers];
     KTVHCLogHTTPResponse(@"%p, Header\n%@", self, headers);
     return headers;
 }
 
 - (UInt64)offset
 {
-    KTVHCLogHTTPResponse(@"%p, Offset : %lld", self, self.reader.readedLength);
-    return self.reader.readedLength;
+    // The connection computes bytesRead = offset - range.location, so the
+    // offset must be absolute within the remote content, not range relative.
+    UInt64 start = 0;
+    if (self.reader.response) {
+        KTVHCRange range = [self.reader.rangePlan responseRangeWithTotalLength:self.reader.response.totalLength];
+        if (range.start != KTVHCNotFound && range.start > 0) {
+            start = (UInt64)range.start;
+        }
+    }
+    KTVHCLogHTTPResponse(@"%p, Offset : %lld", self, (long long)(start + self.reader.readedLength));
+    return start + (UInt64)self.reader.readedLength;
 }
 
 - (void)setOffset:(UInt64)offset

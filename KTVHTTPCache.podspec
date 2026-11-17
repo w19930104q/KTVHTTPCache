@@ -16,6 +16,7 @@ Pod::Spec.new do |s|
                           "KTVHTTPCache/Classes/KTVHCCommon/KTVHCError.h",
                           "KTVHTTPCache/Classes/KTVHCCommon/KTVHCRange.h",
                           "KTVHTTPCache/Classes/KTVHCDataStorage/KTVHCDataReader.h",
+                          "KTVHTTPCache/Classes/KTVHCDataStorage/KTVHCDataRangePlan.h",
                           "KTVHTTPCache/Classes/KTVHCDataStorage/KTVHCDataLoader.h",
                           "KTVHTTPCache/Classes/KTVHCDataStorage/KTVHCDataHLSLoader.h",
                           "KTVHTTPCache/Classes/KTVHCDataStorage/KTVHCDataRequest.h",
